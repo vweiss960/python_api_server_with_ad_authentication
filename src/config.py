@@ -27,10 +27,10 @@ class ServerConfig:
 class ADConfig:
     """Active Directory configuration."""
     server: str
-    use_ssl: bool = False
     base_dn: str
     bind_dn: str
     bind_password: str
+    use_ssl: bool = False
     user_search_filter: str = "(&(objectClass=user)(sAMAccountName={username}))"
     group_base_dn: Optional[str] = None
     group_search_filter: str = "(&(objectClass=group)(member={user_dn}))"

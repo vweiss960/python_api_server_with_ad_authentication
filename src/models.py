@@ -2,6 +2,8 @@
 Pydantic models for API requests and responses.
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -13,13 +15,6 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="User password")
 
 
-class LoginResponse(BaseModel):
-    """Login response model."""
-    token: str = Field(..., description="JWT authentication token")
-    user: "UserInfo"
-    expires_in: int = Field(..., description="Token expiration time in hours")
-
-
 class UserInfo(BaseModel):
     """User information model."""
     username: str
@@ -27,6 +22,13 @@ class UserInfo(BaseModel):
     display_name: Optional[str] = None
     email: Optional[str] = None
     groups: List[str] = Field(default_factory=list)
+
+
+class LoginResponse(BaseModel):
+    """Login response model."""
+    token: str = Field(..., description="JWT authentication token")
+    user: UserInfo
+    expires_in: int = Field(..., description="Token expiration time in hours")
 
 
 class UserGroupsResponse(BaseModel):

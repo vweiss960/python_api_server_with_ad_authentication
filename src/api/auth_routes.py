@@ -2,7 +2,7 @@
 Authentication endpoints.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
 
 from src.models import LoginRequest, LoginResponse, UserInfo
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, authenticator: LDAPAuthenticator, jwt_handler: JWTHandler):
+async def login(request: LoginRequest, authenticator: LDAPAuthenticator = Depends(), jwt_handler: JWTHandler = Depends()):
     """
     Login endpoint.
 

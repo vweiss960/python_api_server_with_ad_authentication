@@ -1,9 +1,11 @@
 - Always ask the User before creating any markdown documents
 - Keep the documentation documents to a minimum. 
-- When the user asks a question be consise with your answers and not overly verbose provide follow up options for the user to persue
+- When the user asks a question be consise with your answers and not overly verbose. Provide follow up options for the user to persue
+- When adding libraries or runnig python code, always make sure you are doing it in the virtual environment.
 - Whenever features are added to the code:
     - Try to test the new feature 
         - The current repo should be set up to test AD related authentication, so test AD related authentication!!
+        - The Config in config/config.test.yaml is pointing to a live domain controllers with configured users and should be used for testing.
         - Make new testing scripts/functions (preferably python) to the tests folder in the project folder
     - Ask the user if new documentation should be generated for the new feature of it current documentation should be updated
     - If the tests are successful, add specific files that shouldn't be added to version control to the .gitignor file and commit the code with a detailed message for what was changed/updated.

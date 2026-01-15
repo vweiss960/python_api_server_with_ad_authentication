@@ -129,7 +129,7 @@ class LDAPAuthenticator:
             self._conn = None
 
     def _normalize_username(self, username: str) -> str:
-        """
+        r"""
         Normalize username to sAMAccountName format.
 
         Handles multiple formats:
@@ -272,7 +272,7 @@ class LDAPAuthenticator:
         return extracted
 
     def authenticate(self, username: str, password: str) -> UserInfo:
-        """
+        r"""
         Authenticate user against AD.
 
         Args:

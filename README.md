@@ -371,6 +371,34 @@ python tools/ad_auth_test.py \
   --output test_result.json
 ```
 
+### Comprehensive API Endpoint Tests
+
+Run full endpoint test suite with different user groups:
+
+```bash
+python tests/test_api_endpoints.py
+```
+
+This tests:
+- Public endpoints (health, login)
+- Authentication with admin and read-only users
+- User info endpoints (requires auth, no group restrictions)
+- Data read endpoints (requires Data-Readers OR Data-Writers)
+- Data write endpoints (requires Data-Writers)
+- Admin endpoints (requires API-Admins group)
+- Authorization failures and edge cases
+
+Test users from `.env`:
+- Admin user (admin_users group): Full access to all endpoints
+- Read-Only user (ro_users group): Read access only
+
+The script automatically:
+- Loads test credentials from `.env` file
+- Starts the API server if not running
+- Tests all endpoints with both users
+- Cleans up gracefully after tests complete
+- Reports pass/fail for each endpoint
+
 ### Testing with cURL
 
 #### Login and Get Token

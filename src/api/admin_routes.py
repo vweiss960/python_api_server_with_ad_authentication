@@ -2,7 +2,7 @@
 Administrative endpoints.
 """
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 
 from src.models import AuthorizationRulesResponse, AuthorizationRule, AccessCheckRequest, AccessCheckResponse
 from src.decorators.auth_decorators import require_auth, require_any_group
@@ -98,7 +98,7 @@ async def get_settings(request: Request):
 @router.get("/rules", response_model=AuthorizationRulesResponse)
 @require_auth
 @require_any_group(["API-Admins"])
-async def get_authorization_rules(request: Request, auth_manager: AuthorizationManager):
+async def get_authorization_rules(request: Request, auth_manager: AuthorizationManager = Depends()):
     """
     Get configured authorization rules (admin only).
 
@@ -130,7 +130,7 @@ async def get_authorization_rules(request: Request, auth_manager: AuthorizationM
 @router.post("/check-access", response_model=AccessCheckResponse)
 @require_auth
 @require_any_group(["API-Admins"])
-async def check_access(request: Request, check_request: AccessCheckRequest, auth_manager: AuthorizationManager):
+async def check_access(request: Request, check_request: AccessCheckRequest, auth_manager: AuthorizationManager = Depends()):
     """
     Check if current user has access to a specific path (admin only).
 
