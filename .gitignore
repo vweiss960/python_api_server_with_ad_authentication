@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project-specific
+config.yaml
+config.local.yaml
+*.pem
+*.key
+*.crt
+*.csr
+test_result*.json
+test_report*.html
+custom_cas/
+*config.test.yaml

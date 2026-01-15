@@ -1,0 +1,27 @@
+# Core framework
+fastapi==0.109.1
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+
+# LDAP/AD authentication
+# Note: On Windows, use pre-built wheels from: https://www.lfd.uci.edu/~gohlke/pythonlibs/#python-ldap
+# Download the appropriate .whl file for your Python version and install with:
+#   pip install python_ldap‑3.4.5‑cp312‑cp312‑win_amd64.whl
+# Or use ldap3 as an alternative pure Python library:
+ldap3==2.9.1
+
+# JWT tokens
+PyJWT==2.8.0
+
+# Configuration
+PyYAML==6.0.1
+python-dotenv==1.0.0
+
+# Development and testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+httpx==0.26.0
+
+# Optional: colorized output for CLI utilities
+colorama==0.4.6

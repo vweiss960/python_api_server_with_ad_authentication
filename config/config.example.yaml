@@ -1,0 +1,100 @@
+# Example configuration file for API Server with AD Authentication
+# Copy this file to config.yaml and update with your settings
+
+server:
+  # Server binding address
+  host: 0.0.0.0
+  # Server port
+  port: 8443
+  # Enable/disable TLS
+  # Set to false for development (HTTP only)
+  # Set to true for production (HTTPS required)
+  tls_enabled: true
+  # Path to SSL certificate file
+  cert_file: /path/to/cert.pem
+  # Path to SSL private key file
+  key_file: /path/to/key.pem
+  # Optional: path to certificate chain/intermediate certs
+  # cert_chain: /path/to/chain.pem
+
+# Active Directory / LDAP configuration
+ad:
+  # LDAP server address and port
+  # Examples:
+  #   ldap://ad.example.com:389 - unencrypted
+  #   ldaps://ad.example.com:636 - encrypted (StartTLS)
+  server: ldap://ad.example.com:389
+  # Use SSL/TLS for LDAP connection
+  use_ssl: false
+  # Base DN for user searches
+  # Example: DC=example,DC=com
+  base_dn: DC=example,DC=com
+  # Service account DN for initial bind
+  # This account is used to search for users and groups
+  # Example: CN=service_account,OU=Users,DC=example,DC=com
+  bind_dn: CN=service_account,OU=Users,DC=example,DC=com
+  # Service account password (use environment variable for security)
+  # Reference environment variables with ${VAR_NAME}
+  bind_password: ${AD_PASSWORD}
+  # LDAP filter to search for users
+  # Available variables: {username}
+  # This filter supports multiple username formats (sAMAccountName, UPN, Domain\Username)
+  user_search_filter: "(&(objectClass=user)(sAMAccountName={username}))"
+  # Base DN for group searches (if different from base_dn)
+  # Optional: if not specified, base_dn is used
+  group_base_dn: OU=Groups,DC=example,DC=com
+  # LDAP filter to search for groups by user membership
+  # Available variables: {user_dn}
+  group_search_filter: "(&(objectClass=group)(member={user_dn}))"
+  # LDAP attribute containing group memberships
+  group_attribute: memberOf
+  # LDAP connection timeout in seconds
+  timeout: 30
+
+# Authorization configuration
+authorization:
+  # LDAP attribute to check for group membership
+  group_attribute: memberOf
+  # Extract simple group names from DNs (CN part only)
+  # If true: "CN=API-Admins,OU=Groups,DC=example,DC=com" becomes "API-Admins"
+  # If false: use full DN for matching
+  use_simple_names: true
+  # Authorization rules - map paths to required groups
+  rules:
+    # Admin endpoints - require API-Admins group
+    - path: /api/admin/*
+      groups: ["API-Admins"]
+      require: any  # "any" = user must be in at least one group, "all" = user must be in all groups
+    # Data write endpoints - require Data-Writers group
+    - path: /api/data/write
+      groups: ["Data-Writers"]
+      require: any
+    # Data read endpoints - require either Data-Readers or Data-Writers
+    - path: /api/data/read
+      groups: ["Data-Readers", "Data-Writers"]
+      require: any
+    # Example with exclusions - allow access but block restricted users
+    - path: /api/reports/*
+      groups: ["Report-Users"]
+      require: any
+      exclude_groups: ["Restricted-Users"]
+
+# JWT token configuration
+jwt:
+  # Secret key for signing JWT tokens
+  # Use environment variable for security
+  secret: ${JWT_SECRET}
+  # Token expiration time in hours
+  expiration_hours: 24
+  # Include user groups in JWT token
+  include_groups: true
+  # JWT signing algorithm
+  algorithm: HS256
+
+# Certificate configuration
+certificates:
+  # Directory containing custom CA certificates for HTTPS requests
+  # Certificates in this directory will be trusted when making outbound HTTPS requests
+  # Useful for self-signed certificates and internal CAs
+  # Optional: if not specified, system default CA certificates are used
+  custom_ca_dir: /path/to/custom_cas/

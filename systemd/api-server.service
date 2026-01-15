@@ -1,0 +1,55 @@
+[Unit]
+Description=API Server with Active Directory Authentication
+Documentation=file:///opt/api-server/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=appuser
+Group=appuser
+WorkingDirectory=/opt/api-server
+
+# Python path
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/opt/api-server/venv/bin"
+
+# Configuration
+Environment="AD_PASSWORD=${AD_PASSWORD}"
+Environment="JWT_SECRET=${JWT_SECRET}"
+
+# Main executable
+ExecStart=/opt/api-server/venv/bin/python -m src.main --config /opt/api-server/config/config.yaml
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Timeouts
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=api-server
+
+[Install]
+WantedBy=multi-user.target
+
+# Installation instructions:
+# 1. Copy this file to /etc/systemd/system/api-server.service
+# 2. sudo systemctl daemon-reload
+# 3. sudo systemctl enable api-server
+# 4. Set environment variables in /etc/default/api-server or in the service file
+# 5. sudo systemctl start api-server
+# 6. sudo systemctl status api-server
+# 7. sudo journalctl -u api-server -f (to follow logs)
