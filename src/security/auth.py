@@ -178,7 +178,7 @@ class LDAPAuthenticator:
             if not conn.search(
                 search_base=self.config.base_dn,
                 search_filter=search_filter,
-                attributes=["*"],
+                attributes=["*", "memberOf"],
             ):
                 logger.warning(f"User not found: {username}")
                 return None, None
@@ -219,14 +219,17 @@ class LDAPAuthenticator:
             search_filter = self.config.group_search_filter.format(user_dn=user_dn)
             group_base = self.config.group_base_dn or self.config.base_dn
 
-            logger.debug(f"Searching for groups with filter: {search_filter}")
+            logger.debug(f"Searching for groups in base {group_base} with filter: {search_filter}")
 
-            if not conn.search(
+            search_result = conn.search(
                 search_base=group_base,
                 search_filter=search_filter,
                 attributes=["distinguishedName", "cn"],
-            ):
-                logger.debug(f"No groups found for user {user_dn}")
+            )
+
+            if not search_result:
+                logger.warning(f"Group search returned no results for user {user_dn}")
+                logger.debug(f"This may indicate: (1) user not in any groups, (2) incorrect group_base_dn, or (3) incorrect group_search_filter")
                 return groups
 
             # Extract group DNs from results
@@ -317,11 +320,38 @@ class LDAPAuthenticator:
             logger.error(f"LDAP authentication error for {username}: {str(e)}")
             raise ADConnectionError(f"Authentication failed: {str(e)}")
 
-        # Get user groups
-        groups = self._get_user_groups(user_dn)
-
-        # Extract user attributes
+        # Extract user attributes and groups
         user_attrs = self._extract_user_attributes(attributes)
+
+        # Get groups from memberOf attribute
+        groups = []
+        if "memberOf" in attributes:
+            member_of = attributes["memberOf"]
+            logger.debug(f"memberOf raw value for {username}: {repr(member_of)} (type: {type(member_of).__name__})")
+            # memberOf can be a list, single value, empty list, or None
+            if isinstance(member_of, list) and member_of:
+                groups = member_of
+            elif isinstance(member_of, str) and member_of:
+                groups = [member_of]
+
+            if groups:
+                logger.info(f"User {username} has {len(groups)} group memberships from memberOf")
+            else:
+                # memberOf attribute exists but is empty, use fallback search
+                logger.debug(f"memberOf attribute is empty for user {username}, using fallback group search")
+                groups = self._get_user_groups(user_dn)
+                if groups:
+                    logger.info(f"User {username} has {len(groups)} group memberships from fallback search")
+                else:
+                    logger.warning(f"No group memberships found for user {username} via memberOf or fallback search")
+        else:
+            # memberOf attribute not in LDAP record, use fallback search
+            logger.debug(f"memberOf attribute not found in LDAP record for user {username}, using fallback group search")
+            groups = self._get_user_groups(user_dn)
+            if groups:
+                logger.info(f"User {username} has {len(groups)} group memberships from fallback search")
+            else:
+                logger.warning(f"No group memberships found for user {username} via fallback search")
 
         return UserInfo(
             username=username,

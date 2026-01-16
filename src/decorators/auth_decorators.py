@@ -62,7 +62,7 @@ def require_groups(groups: List[str]):
             for group in groups:
                 if group not in user_groups:
                     logger.warning(
-                        f"User {request.state.user.get('username')} lacks required group: {group}"
+                        f"User {request.state.user.get('sub')} lacks required group: {group}"
                     )
                     raise HTTPException(
                         status_code=403,
@@ -98,7 +98,7 @@ def require_any_group(groups: List[str]):
             # Check if user is in at least one required group
             if not any(group in user_groups for group in groups):
                 logger.warning(
-                    f"User {request.state.user.get('username')} not in any required group"
+                    f"User {request.state.user.get('sub')} not in any required group"
                 )
                 raise HTTPException(
                     status_code=403,
@@ -134,7 +134,7 @@ def require_not_in_group(groups: List[str]):
             # Check if user is in any excluded groups
             if any(group in user_groups for group in groups):
                 logger.warning(
-                    f"User {request.state.user.get('username')} is in excluded group"
+                    f"User {request.state.user.get('sub')} is in excluded group"
                 )
                 raise HTTPException(
                     status_code=403,

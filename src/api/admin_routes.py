@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/admin", tags=["Administration"])
 
 @router.get("/users")
 @require_auth
-@require_any_group(["API-Admins"])
+@require_any_group(["admin_users"])
 async def list_users(request: Request):
     """
     List users endpoint (admin only).
@@ -43,7 +43,7 @@ async def list_users(request: Request):
 
 @router.delete("/users/{user_id}")
 @require_auth
-@require_any_group(["API-Admins"])
+@require_any_group(["admin_users"])
 async def delete_user(user_id: str, request: Request):
     """
     Delete user endpoint (admin only).
@@ -70,7 +70,7 @@ async def delete_user(user_id: str, request: Request):
 
 @router.get("/settings")
 @require_auth
-@require_any_group(["API-Admins"])
+@require_any_group(["admin_users"])
 async def get_settings(request: Request):
     """
     Get application settings (admin only).
@@ -97,8 +97,8 @@ async def get_settings(request: Request):
 
 @router.get("/rules", response_model=AuthorizationRulesResponse)
 @require_auth
-@require_any_group(["API-Admins"])
-async def get_authorization_rules(request: Request, auth_manager: AuthorizationManager = Depends()):
+@require_any_group(["admin_users"])
+async def get_authorization_rules(request: Request):
     """
     Get configured authorization rules (admin only).
 
@@ -112,6 +112,9 @@ async def get_authorization_rules(request: Request, auth_manager: AuthorizationM
     """
     user = request.state.user
     logger.info(f"Admin {user.get('sub')} accessed authorization rules")
+
+    # Get auth manager from app dependency overrides
+    auth_manager = request.app.dependency_overrides[AuthorizationManager]()
 
     rules = auth_manager.get_all_rules()
     auth_rules = [
@@ -129,8 +132,8 @@ async def get_authorization_rules(request: Request, auth_manager: AuthorizationM
 
 @router.post("/check-access", response_model=AccessCheckResponse)
 @require_auth
-@require_any_group(["API-Admins"])
-async def check_access(request: Request, check_request: AccessCheckRequest, auth_manager: AuthorizationManager = Depends()):
+@require_any_group(["admin_users"])
+async def check_access(request: Request, check_request: AccessCheckRequest):
     """
     Check if current user has access to a specific path (admin only).
 
@@ -147,6 +150,9 @@ async def check_access(request: Request, check_request: AccessCheckRequest, auth
     """
     user = request.state.user
     user_groups = user.get("groups", [])
+
+    # Get auth manager from app dependency overrides
+    auth_manager = request.app.dependency_overrides[AuthorizationManager]()
 
     authorized, required_groups, message = auth_manager.check_authorization(
         check_request.path,

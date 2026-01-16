@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/data", tags=["Data"])
 
 @router.get("/read")
 @require_auth
-@require_any_group(["Data-Readers", "Data-Writers"])
+@require_any_group(["admin_users", "ro_users"])
 async def read_data(request: Request):
     """
     Read data endpoint.
@@ -42,7 +42,7 @@ async def read_data(request: Request):
 
 @router.post("/write")
 @require_auth
-@require_any_group(["Data-Writers"])
+@require_any_group(["admin_users"])
 async def write_data(request: Request):
     """
     Write data endpoint.
