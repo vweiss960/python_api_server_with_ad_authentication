@@ -113,13 +113,13 @@ def setup_app(config_path: str) -> FastAPI:
     app.add_middleware(AuthenticationMiddleware, jwt_handler=jwt_handler)
 
     # Setup dependency injection for route handlers
-    async def get_authenticator():
+    def get_authenticator():
         return authenticator
 
-    async def get_jwt_handler():
+    def get_jwt_handler():
         return jwt_handler
 
-    async def get_auth_manager():
+    def get_auth_manager():
         return auth_manager
 
     app.dependency_overrides[LDAPAuthenticator] = get_authenticator

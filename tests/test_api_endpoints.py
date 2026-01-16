@@ -21,7 +21,6 @@ import sys
 import json
 import time
 import subprocess
-import signal
 from pathlib import Path
 from typing import Dict, Tuple, Optional
 from dotenv import load_dotenv
@@ -84,26 +83,36 @@ class APITestSuite:
                 load_dotenv(env_file)
                 env.update(os.environ)
 
-            self.server_process = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "src.main",
-                    "--config",
-                    str(project_root / "config" / "config.test.yaml"),
-                ],
-                cwd=str(project_root),
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
+            # Create log file for server output
+            log_file = project_root / "test_server.log"
+
+            with open(log_file, 'w') as log:
+                # Use Windows-specific flags to detach process
+                creationflags = 0
+                if sys.platform == "win32":
+                    creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+
+                self.server_process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-m",
+                        "src.main",
+                        "--config",
+                        str(project_root / "config" / "config.test.yaml"),
+                    ],
+                    cwd=str(project_root),
+                    env=env,
+                    stdout=log,
+                    stderr=log,
+                    creationflags=creationflags,
+                )
 
             # Wait for server to start
             for _ in range(30):
+                time.sleep(0.5)
                 if self.check_server_running():
                     print("[INFO] API server started successfully")
                     return True
-                time.sleep(0.5)
 
             print("[ERROR] Server failed to start after 15 seconds")
             return False
@@ -117,10 +126,14 @@ class APITestSuite:
         if self.server_process:
             print("[INFO] Stopping API server...")
             try:
+                # Attempt graceful termination
                 self.server_process.terminate()
-                self.server_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.server_process.kill()
+                try:
+                    self.server_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    # Force kill if graceful termination fails
+                    self.server_process.kill()
+                    self.server_process.wait()
             except Exception as e:
                 print(f"[WARNING] Error stopping server: {str(e)}")
 
@@ -134,8 +147,11 @@ class APITestSuite:
             )
             if response.status_code == 200:
                 return response.json().get("token")
+            else:
+                print(f"    Login failed with status {response.status_code}: {response.text}")
             return None
-        except Exception:
+        except Exception as e:
+            print(f"    Login request error: {str(e)}")
             return None
 
     def make_request(

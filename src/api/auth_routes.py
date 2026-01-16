@@ -2,7 +2,7 @@
 Authentication endpoints.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Request
 from datetime import datetime
 
 from src.models import LoginRequest, LoginResponse, UserInfo
@@ -21,16 +21,15 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, authenticator: LDAPAuthenticator = Depends(), jwt_handler: JWTHandler = Depends()):
+async def login(req: LoginRequest, request: Request):
     """
     Login endpoint.
 
     Authenticates user against Active Directory and returns JWT token.
 
     Args:
-        request: Login request with username and password
-        authenticator: LDAP authenticator
-        jwt_handler: JWT token handler
+        req: Login request with username and password
+        request: FastAPI request object
 
     Returns:
         LoginResponse with token and user info
@@ -39,8 +38,12 @@ async def login(request: LoginRequest, authenticator: LDAPAuthenticator = Depend
         HTTPException: If authentication fails
     """
     try:
+        # Get dependencies from app state
+        authenticator: LDAPAuthenticator = request.app.dependency_overrides[LDAPAuthenticator]()
+        jwt_handler: JWTHandler = request.app.dependency_overrides[JWTHandler]()
+
         # Authenticate against AD
-        user_info = authenticator.authenticate(request.username, request.password)
+        user_info = authenticator.authenticate(req.username, req.password)
 
         # Generate JWT token
         token = jwt_handler.generate_token(user_info, use_simple_names=True)
@@ -60,7 +63,7 @@ async def login(request: LoginRequest, authenticator: LDAPAuthenticator = Depend
         )
 
     except InvalidCredentialsError as e:
-        logger.warning(f"Login failed for {request.username}: {e.message}")
+        logger.warning(f"Login failed for {req.username}: {e.message}")
         raise HTTPException(status_code=401, detail=e.message)
 
     except ADConnectionError as e:
