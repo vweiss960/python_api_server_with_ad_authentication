@@ -132,10 +132,42 @@ class ConfigLoader:
             return [self._resolve_env_vars(item) for item in value]
         return value
 
+    def _resolve_relative_paths(self, value: Any) -> Any:
+        """
+        Resolve relative file paths relative to project root.
+
+        Paths ending in common file extensions (.pem, .key, .crt, .csr)
+        are treated as file paths and resolved relative to the project root
+        (parent directory of the config directory).
+        """
+        if isinstance(value, str):
+            # Skip URLs (contain :// or are ldap server addresses)
+            if '://' in value:
+                return value
+
+            # Check if it looks like a file path (ends with common file extensions)
+            if value and any(value.endswith(ext) for ext in ['.pem', '.key', '.crt', '.csr', '.yaml', '.yml', '.json']):
+                # Convert to Path and resolve relative to project root
+                path = Path(value)
+                if not path.is_absolute():
+                    # Resolve relative to project root (config file's parent directory)
+                    project_root = self.config_path.parent.parent
+                    path = (project_root / path).resolve()
+                return str(path)
+            return value
+        elif isinstance(value, dict):
+            return {k: self._resolve_relative_paths(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [self._resolve_relative_paths(item) for item in value]
+        return value
+
     def _parse_config(self) -> Config:
         """Parse configuration into dataclass objects."""
         # Resolve environment variables
         config_dict = self._resolve_env_vars(self.raw_config)
+
+        # Resolve relative file paths based on config file location
+        config_dict = self._resolve_relative_paths(config_dict)
 
         # Parse server config
         server_dict = config_dict.get("server", {})
