@@ -31,6 +31,7 @@ class ADConfig:
     bind_dn: str
     bind_password: str
     use_ssl: bool = False
+    ca_certs_file: Optional[str] = None
     user_search_filter: str = "(&(objectClass=user)(sAMAccountName={username}))"
     group_base_dn: Optional[str] = None
     group_search_filter: str = "(&(objectClass=group)(member={user_dn}))"
@@ -202,6 +203,12 @@ class ConfigLoader:
             errors.append("AD bind_dn not specified")
         if not self.config.ad.bind_password:
             errors.append("AD bind_password not specified")
+
+        # Validate CA certificate file if specified
+        if self.config.ad.ca_certs_file:
+            ca_file = Path(self.config.ad.ca_certs_file)
+            if not ca_file.exists():
+                errors.append(f"AD CA certificate file not found: {self.config.ad.ca_certs_file}")
 
         # Validate JWT config
         if not self.config.jwt.secret:

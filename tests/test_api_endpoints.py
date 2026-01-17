@@ -21,12 +21,15 @@ import sys
 import json
 import time
 import subprocess
+import ssl
 from pathlib import Path
 from typing import Dict, Tuple, Optional
 from dotenv import load_dotenv
 
 try:
     import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.ssl_ import create_urllib3_context
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
@@ -34,16 +37,38 @@ except ImportError:
     sys.exit(1)
 
 
+class InsecureHTTPSAdapter(HTTPAdapter):
+    """HTTPS adapter that trusts all certificates (for testing only)."""
+
+    def init_poolmanager(self, *args, **kwargs):
+        """Initialize pool manager with insecure SSL context."""
+        context = create_urllib3_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        kwargs['ssl_context'] = context
+        return super().init_poolmanager(*args, **kwargs)
+
+
 class APITestSuite:
     """Test suite for API endpoint authentication and authorization."""
 
-    def __init__(self, base_url: str = "http://localhost:8443"):
+    def __init__(self, base_url: str = "http://localhost:8443", use_https: bool = False):
         """Initialize test suite."""
         self.base_url = base_url
+        self.use_https = use_https
         self.admin_token = None
         self.ro_token = None
         self.test_results: Dict[str, bool] = {}
         self.server_process = None
+        self._setup_requests_session()
+
+    def _setup_requests_session(self):
+        """Setup requests session with appropriate SSL settings."""
+        self.session = requests.Session()
+        if self.use_https:
+            # Use insecure HTTPS adapter for testing with self-signed certs
+            adapter = InsecureHTTPSAdapter()
+            self.session.mount("https://", adapter)
 
     def print_header(self, text: str):
         """Print formatted header."""
@@ -60,9 +85,10 @@ class APITestSuite:
     def check_server_running(self) -> bool:
         """Check if API server is running."""
         try:
-            response = requests.get(f"{self.base_url}/health", timeout=2, verify=False)
+            # Use verify=False for self-signed certificates
+            response = self.session.get(f"{self.base_url}/health", timeout=2, verify=False)
             return response.status_code == 200
-        except Exception:
+        except Exception as e:
             return False
 
     def start_server(self) -> bool:
@@ -140,10 +166,9 @@ class APITestSuite:
     def login_user(self, username: str, password: str) -> Optional[str]:
         """Login user and return JWT token."""
         try:
-            response = requests.post(
+            response = self.session.post(
                 f"{self.base_url}/auth/login",
                 json={"username": username, "password": password},
-                verify=False,
             )
             if response.status_code == 200:
                 return response.json().get("token")
@@ -169,9 +194,9 @@ class APITestSuite:
                 headers["Authorization"] = f"Bearer {token}"
 
             if method == "GET":
-                response = requests.get(url, headers=headers, verify=False, timeout=5)
+                response = self.session.get(url, headers=headers, timeout=5)
             elif method == "POST":
-                response = requests.post(url, headers=headers, verify=False, timeout=5)
+                response = self.session.post(url, headers=headers, timeout=5)
             else:
                 return False, 0
 
@@ -313,16 +338,173 @@ class APITestSuite:
 
         try:
             # Check access to admin endpoint
-            response = requests.post(
+            response = self.session.post(
                 f"{self.base_url}/api/admin/check-access",
                 json={"path": "/api/admin/users"},
                 headers={"Authorization": f"Bearer {self.admin_token}"},
-                verify=False,
             )
             passed = response.status_code == 200
             self.print_test("POST /api/admin/check-access (admin user to /api/admin/users)", passed)
         except Exception:
             self.print_test("POST /api/admin/check-access (admin user to /api/admin/users)", False)
+
+    def test_ldap_secure_connection(self):
+        """Test that LDAP connection uses TLS with CA certificate validation."""
+        self.print_header("Testing Secure LDAP Connection")
+
+        try:
+            # Add project root to path to enable imports
+            import sys
+            project_root = Path(__file__).parent.parent
+            if str(project_root) not in sys.path:
+                sys.path.insert(0, str(project_root))
+
+            # Import the authenticator to check configuration
+            from src.security.auth import LDAPAuthenticator
+            from src.config import ConfigLoader
+
+            # Load the test config
+            project_root = Path(__file__).parent.parent
+            config_path = project_root / "config" / "config.test.yaml"
+
+            loader = ConfigLoader(str(config_path))
+            config = loader.get()
+
+            # Verify LDAP configuration
+            ldap_config = config.ad
+
+            # Check that use_ssl is enabled
+            use_ssl_passed = ldap_config.use_ssl is True
+            self.print_test("LDAP use_ssl is enabled", use_ssl_passed)
+
+            # Check that ca_certs_file is specified
+            ca_certs_passed = ldap_config.ca_certs_file is not None
+            self.print_test("LDAP ca_certs_file is specified", ca_certs_passed)
+
+            # Check that the CA cert file exists
+            if ldap_config.ca_certs_file:
+                ca_file_path = Path(ldap_config.ca_certs_file)
+                ca_file_exists = ca_file_path.exists()
+                self.print_test(
+                    f"LDAP CA certificate file exists ({ldap_config.ca_certs_file})",
+                    ca_file_exists,
+                )
+            else:
+                self.print_test("LDAP CA certificate file path specified", False)
+
+            # Check that server uses ldaps protocol
+            ldaps_protocol = ldap_config.server.lower().startswith("ldaps://")
+            self.print_test(
+                f"LDAP server uses secure protocol (ldaps://) - {ldap_config.server}",
+                ldaps_protocol,
+            )
+
+            # Verify the authenticator creates TLS configuration
+            try:
+                authenticator = LDAPAuthenticator(ldap_config)
+                server = authenticator._get_server()
+
+                # Check if TLS is configured on the server object
+                tls_configured = server.tls is not None
+                self.print_test("LDAPAuthenticator creates TLS configuration", tls_configured)
+
+                if tls_configured:
+                    # Verify TLS validation is required
+                    import ssl as ssl_module
+
+                    tls_validate_required = server.tls.validate == ssl_module.CERT_REQUIRED
+                    self.print_test("TLS certificate validation is REQUIRED", tls_validate_required)
+
+            except Exception as e:
+                self.print_test(
+                    f"LDAPAuthenticator TLS configuration verification",
+                    False,
+                )
+                print(f"    Error: {str(e)}")
+
+        except Exception as e:
+            self.print_test("Secure LDAP connection configuration check", False)
+            print(f"    Error: {str(e)}")
+
+    def test_api_ssl_encryption(self):
+        """Test that API server uses SSL/TLS encryption."""
+        self.print_header("Testing API Server SSL/TLS Encryption")
+
+        if not self.use_https:
+            print("[SKIP] Test suite not configured for HTTPS (use_https=True)")
+            return
+
+        try:
+            # Add project root to path to enable imports
+            import sys
+            project_root = Path(__file__).parent.parent
+            if str(project_root) not in sys.path:
+                sys.path.insert(0, str(project_root))
+
+            from src.config import ConfigLoader
+
+            # Load the test config
+            project_root = Path(__file__).parent.parent
+            config_path = project_root / "config" / "config.test.yaml"
+
+            loader = ConfigLoader(str(config_path))
+            config = loader.get()
+
+            # Verify server TLS configuration
+            server_config = config.server
+
+            # Check that TLS is enabled
+            tls_enabled = server_config.tls_enabled is True
+            self.print_test("Server TLS is enabled", tls_enabled)
+
+            # Check that certificate file is specified
+            cert_file_passed = server_config.cert_file is not None
+            self.print_test("Server certificate file is specified", cert_file_passed)
+
+            # Check that certificate file exists
+            if server_config.cert_file:
+                cert_path = Path(server_config.cert_file)
+                cert_exists = cert_path.exists()
+                self.print_test(
+                    f"Server certificate file exists ({server_config.cert_file})",
+                    cert_exists,
+                )
+            else:
+                self.print_test("Server certificate file exists", False)
+
+            # Check that key file is specified
+            key_file_passed = server_config.key_file is not None
+            self.print_test("Server key file is specified", key_file_passed)
+
+            # Check that key file exists
+            if server_config.key_file:
+                key_path = Path(server_config.key_file)
+                key_exists = key_path.exists()
+                self.print_test(
+                    f"Server key file exists ({server_config.key_file})",
+                    key_exists,
+                )
+            else:
+                self.print_test("Server key file exists", False)
+
+            # Test that we can establish HTTPS connection with cert trust disabled
+            try:
+                response = self.session.get(f"{self.base_url}/health", timeout=5)
+                connection_passed = response.status_code == 200
+                self.print_test(
+                    "HTTPS connection successful (with certificate trust disabled for testing)",
+                    connection_passed,
+                )
+            except Exception as e:
+                self.print_test(
+                    "HTTPS connection successful (with certificate trust disabled for testing)",
+                    False,
+                )
+                print(f"    Error: {str(e)}")
+
+        except Exception as e:
+            self.print_test("API server SSL/TLS encryption configuration check", False)
+            print(f"    Error: {str(e)}")
 
     def test_invalid_token(self):
         """Test endpoints with invalid tokens."""
@@ -371,6 +553,8 @@ class APITestSuite:
             self.test_data_write_endpoints()
             self.test_admin_endpoints()
             self.test_authorization_check_endpoint()
+            self.test_ldap_secure_connection()
+            self.test_api_ssl_encryption()
             self.test_invalid_token()
 
             # Print summary
@@ -391,13 +575,34 @@ def main():
     else:
         print("[WARNING] .env file not found. Using default test credentials.")
 
+    # Check for HTTPS flag or auto-detect from config
+    use_https = "--https" in sys.argv or "HTTPS" in os.environ
+
+    # Auto-detect TLS from config if not explicitly set
+    if not use_https:
+        try:
+            from src.config import ConfigLoader
+            project_root = Path(__file__).parent.parent
+            config_path = project_root / "config" / "config.test.yaml"
+            loader = ConfigLoader(str(config_path))
+            config = loader.get()
+            use_https = config.server.tls_enabled
+        except Exception:
+            pass  # Fall back to manual flag if config loading fails
+
+    base_url = "https://localhost:8443" if use_https else "http://localhost:8443"
+
     print("\n" + "=" * 70)
     print("  API Endpoint Test Suite")
     print("  Testing AD Authentication and Group-Based Authorization")
+    if use_https:
+        print("  Protocol: HTTPS (with self-signed certificate trust)")
+    else:
+        print("  Protocol: HTTP")
     print("=" * 70)
 
     # Create test suite
-    suite = APITestSuite()
+    suite = APITestSuite(base_url=base_url, use_https=use_https)
 
     # Run tests
     all_passed = suite.run_all_tests()

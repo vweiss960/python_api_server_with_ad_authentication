@@ -5,10 +5,11 @@ Uses the pure Python ldap3 library which works cross-platform without
 requiring compiled C extensions.
 """
 
-from ldap3 import Server, Connection, ALL, NTLM
+from ldap3 import Server, Connection, ALL, NTLM, Tls
 from ldap3.core.exceptions import LDAPException, LDAPInvalidCredentialsResult
 from typing import Optional, List, Dict, Tuple
 from dataclasses import dataclass
+import ssl
 
 from src.config import ADConfig
 from src.utils.logger import get_logger
@@ -73,10 +74,22 @@ class LDAPAuthenticator:
 
                 logger.debug(f"Connecting to LDAP server: {host}:{port} (SSL: {use_ssl})")
 
+                # Configure TLS if SSL is enabled or CA certificate is specified
+                tls = None
+                if use_ssl or self.config.ca_certs_file:
+                    tls = Tls(
+                        validate=ssl.CERT_REQUIRED,
+                        version=ssl.PROTOCOL_TLSv1_2,
+                        ca_certs_file=self.config.ca_certs_file,
+                    )
+                    if self.config.ca_certs_file:
+                        logger.debug(f"Using custom CA certificate: {self.config.ca_certs_file}")
+
                 self._server = Server(
                     host,
                     port=port,
                     use_ssl=use_ssl,
+                    tls=tls,
                     get_info=ALL,
                     connect_timeout=self.config.timeout,
                 )

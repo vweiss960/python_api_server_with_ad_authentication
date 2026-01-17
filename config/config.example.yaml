@@ -10,22 +10,34 @@ server:
   # Set to false for development (HTTP only)
   # Set to true for production (HTTPS required)
   tls_enabled: true
-  # Path to SSL certificate file
-  cert_file: /path/to/cert.pem
-  # Path to SSL private key file
-  key_file: /path/to/key.pem
+  # Path to SSL certificate file for the API service
+  # Examples:
+  #   ./certificates/api-cert.pem
+  #   /etc/ssl/certs/api-cert.pem
+  cert_file: ./certificates/api-cert.pem
+  # Path to SSL private key file for the API service
+  # Examples:
+  #   ./certificates/api-key.pem
+  #   /etc/ssl/private/api-key.pem
+  key_file: ./certificates/api-key.pem
   # Optional: path to certificate chain/intermediate certs
-  # cert_chain: /path/to/chain.pem
+  # cert_chain: ./certificates/chain.pem
 
 # Active Directory / LDAP configuration
 ad:
   # LDAP server address and port
   # Examples:
   #   ldap://ad.example.com:389 - unencrypted
-  #   ldaps://ad.example.com:636 - encrypted (StartTLS)
+  #   ldaps://ad.example.com:636 - encrypted (TLS)
   server: ldap://ad.example.com:389
   # Use SSL/TLS for LDAP connection
   use_ssl: false
+  # Optional: Path to CA certificate file for LDAP server certificate verification
+  # Required when use_ssl is true and the LDAP server uses a self-signed or internal CA certificate
+  # Examples:
+  #   ./certificates/ad-ca.pem
+  #   /etc/ssl/certs/ad-ca-chain.pem
+  ca_certs_file: null
   # Base DN for user searches
   # Example: DC=example,DC=com
   base_dn: DC=example,DC=com
