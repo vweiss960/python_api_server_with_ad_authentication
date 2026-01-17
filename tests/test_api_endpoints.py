@@ -91,6 +91,51 @@ class APITestSuite:
         except Exception as e:
             return False
 
+    def _kill_process_on_port(self, port: int) -> bool:
+        """Kill any process running on the specified port."""
+        try:
+            # Try fuser first (Linux/Unix)
+            import subprocess
+            try:
+                result = subprocess.run(
+                    ["fuser", f"{port}/tcp"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    # Get the PID from fuser output
+                    pid = result.stdout.strip()
+                    if pid:
+                        subprocess.run(["kill", "-9", pid], timeout=5)
+                        time.sleep(1)
+                        return True
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                # fuser not available, try lsof
+                pass
+
+            # Fallback to lsof
+            try:
+                result = subprocess.run(
+                    ["lsof", "-ti", f":{port}"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    pid = result.stdout.strip().split('\n')[0]
+                    if pid:
+                        subprocess.run(["kill", "-9", pid], timeout=5)
+                        time.sleep(1)
+                        return True
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+
+            return False
+        except Exception as e:
+            print(f"[WARNING] Could not kill process on port {port}: {str(e)}")
+            return False
+
     def start_server(self) -> bool:
         """Start API server if not running."""
         if self.check_server_running():
@@ -99,6 +144,10 @@ class APITestSuite:
 
         print("[INFO] Starting API server...")
         try:
+            # Kill any existing process on port 8443 to avoid conflicts
+            self._kill_process_on_port(8443)
+            time.sleep(0.5)  # Give OS time to release the port
+
             # Get project root
             project_root = Path(__file__).parent.parent
             env_file = project_root / ".env"
@@ -141,6 +190,15 @@ class APITestSuite:
                     return True
 
             print("[ERROR] Server failed to start after 15 seconds")
+            # Print server log for debugging
+            try:
+                with open(log_file, 'r') as f:
+                    log_content = f.read()
+                    if log_content:
+                        print("[SERVER LOG]")
+                        print(log_content)
+            except Exception:
+                pass
             return False
 
         except Exception as e:
@@ -568,8 +626,13 @@ class APITestSuite:
 
 def main():
     """Main entry point."""
+    # Setup Python path to ensure src module can be imported
+    project_root = Path(__file__).parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
     # Load environment variables
-    env_file = Path(__file__).parent.parent / ".env"
+    env_file = project_root / ".env"
     if env_file.exists():
         load_dotenv(env_file)
     else:
@@ -582,12 +645,12 @@ def main():
     if not use_https:
         try:
             from src.config import ConfigLoader
-            project_root = Path(__file__).parent.parent
             config_path = project_root / "config" / "config.test.yaml"
             loader = ConfigLoader(str(config_path))
             config = loader.get()
             use_https = config.server.tls_enabled
-        except Exception:
+        except Exception as e:
+            print(f"[DEBUG] Could not auto-detect TLS from config: {str(e)}")
             pass  # Fall back to manual flag if config loading fails
 
     base_url = "https://localhost:8443" if use_https else "http://localhost:8443"
