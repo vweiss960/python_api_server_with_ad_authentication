@@ -140,6 +140,7 @@ celerybeat.pid
 .venv
 env/
 venv/
+test_venv/
 ENV/
 env.bak/
 venv.bak/
@@ -217,3 +218,4 @@ test_result*.json
 test_report*.html
 custom_cas/
 *config.test.yaml
+*certificates/
