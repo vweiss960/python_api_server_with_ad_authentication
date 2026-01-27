@@ -14,6 +14,46 @@ logger = get_logger("routes.admin")
 router = APIRouter(prefix="/api/admin", tags=["Administration"])
 
 
+#############################################################################
+### HELLO WORLD GET #####
+#############################################################################
+
+@router.get("/hello_world")
+@require_auth
+@require_any_group(["admin_users"])
+async def say_hello(request: Request):
+    user = request.state.user
+    logger.info(f"Admin {user.get('sub')} accessed hello_world")
+
+    return {
+        "message": "hello world!",
+    }
+
+#############################################################################
+### HELLO WORLD POST #####
+#############################################################################
+
+##### CRATE THE DATA MODEL FOR THE DATA TO BE RECEIVED #####
+from pydantic import BaseModel
+class Name_Object(BaseModel):
+    """name payload."""
+    name: str
+
+@router.post("/hello_world")
+@require_auth
+@require_any_group(["admin_users"])
+async def say_hello_to_user(request: Request, data: Name_Object):
+    user = request.state.user
+    logger.info(f"Admin {user.get('sub')} manipulated hello_world name")
+
+    return {
+        "message": f"hello {data.name}!",
+    }
+
+
+#############################################################################
+
+
 @router.get("/users")
 @require_auth
 @require_any_group(["admin_users"])

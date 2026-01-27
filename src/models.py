@@ -9,6 +9,31 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
+####################################################
+#### EXAMPLE MODEL DEFINITIONS FOR COMPLEX MODEL
+####################################################
+
+from enum import Enum
+
+class InterfaceStatus(str, Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+class Interface(BaseModel):
+    ip_addr: str
+    status: InterfaceStatus
+    description: str
+
+class Device(BaseModel):
+    interfaces: list[Interface]
+    hostname: str
+    location: str
+    mgmt_interface: Interface
+
+
+###################################################
+
+
 class LoginRequest(BaseModel):
     """Login request model."""
     username: str = Field(..., description="Username (sAMAccountName, Domain\\Username, or UPN)")
