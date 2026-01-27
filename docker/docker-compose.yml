@@ -1,0 +1,21 @@
+services:
+  api-server:
+    image: api-server:latest
+    container_name: api-server
+    ports:
+      - "8443:8443"
+    dns:
+      - 10.24.110.21
+    restart: unless-stopped
+    # environment:
+    #   - AD_PASSWORD=YOU_AD_PASSWORD
+    #   - JWT_SECRET=super_secret_jwt_string
+    volumes:
+      - ../config/config.docker.yaml:/app/config/config.docker.yaml
+      - ../certificates:/app/certificates
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8443/health', verify=False)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

@@ -18,10 +18,10 @@ router = APIRouter(prefix="/api/admin", tags=["Administration"])
 ### SAY HELLO WORLD #####
 #############################################################################
 
-@router.get("/hello_world")
-@require_auth
-@require_any_group(["admin_users"])
-async def say_hello(request: Request):
+@router.get("/hello_world")             ### Define the method and the endpoint
+@require_auth                           ### This decorator is needed for authentication
+@require_any_group(["admin_users"])     ### This decorator is needed to limit access to specific groups
+async def say_hello(request: Request):  ### All functions should take the request as an argument
     user = request.state.user
     logger.info(f"Admin {user.get('sub')} accessed hello_world")
 

@@ -65,7 +65,7 @@ def setup_app(config_path: str) -> FastAPI:
         sys.exit(1)
 
     # Setup logging
-    log_level = "DEBUG"
+    log_level = "INFO"
     logger = setup_logging(level=log_level, json_format=True)
     logger.info(f"Application starting with config: {config_path}")
 

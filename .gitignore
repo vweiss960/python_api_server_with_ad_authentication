@@ -218,4 +218,5 @@ test_result*.json
 test_report*.html
 custom_cas/
 *config.test.yaml
+*config.docker.yaml
 *certificates/

@@ -1,12 +1,5 @@
 # Multi-stage build for minimal image size
-FROM python:3.11-slim as builder
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libldap2-dev \
-    libsasl2-dev \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.12-slim AS builder
 
 # Create virtual environment
 RUN python -m venv /opt/venv
@@ -17,13 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Final stage
-FROM python:3.11-slim
-
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y \
-    libldap-2.5-0 \
-    libsasl2-2 \
-    && rm -rf /var/lib/apt/lists/*
+FROM python:3.12-slim
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
@@ -36,6 +23,7 @@ WORKDIR /app
 COPY src/ ./src/
 COPY config/ ./config/
 COPY tools/ ./tools/
+COPY certificates/ ./certificates/
 COPY requirements.txt .
 
 # Create non-root user for running the application
@@ -53,7 +41,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 8443
 
 # Default command
-CMD ["python", "-m", "src.main", "--config", "/app/config/config.docker.yaml"]
+CMD ["python3", "-m", "src.main", "--config", "/app/config/config.docker.yaml"]
 
 # Build instructions:
 # docker build -t api-server:latest -f docker/Dockerfile .
