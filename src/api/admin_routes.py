@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/admin", tags=["Administration"])
 
 
 #############################################################################
-### HELLO WORLD GET #####
+### SAY HELLO WORLD #####
 #############################################################################
 
 @router.get("/hello_world")
@@ -30,7 +30,7 @@ async def say_hello(request: Request):
     }
 
 #############################################################################
-### HELLO WORLD POST #####
+### SAY HELLO WORLD TO THE USER #####
 #############################################################################
 
 ##### CRATE THE DATA MODEL FOR THE DATA TO BE RECEIVED #####
