@@ -10,6 +10,7 @@ from ldap3.core.exceptions import LDAPException, LDAPInvalidCredentialsResult
 from typing import Optional, List, Dict, Tuple
 from dataclasses import dataclass
 import ssl
+import time
 
 from src.config import ADConfig
 from src.utils.logger import get_logger
@@ -48,6 +49,7 @@ class LDAPAuthenticator:
         self.config = config
         self._server = None
         self._conn = None
+        self._conn_time = None  # Track when connection was established
 
     def _get_server(self) -> Server:
         """
@@ -98,9 +100,28 @@ class LDAPAuthenticator:
 
         return self._server
 
-    def _get_connection(self) -> Connection:
+    def _is_connection_alive(self) -> bool:
         """
-        Get or create LDAP connection.
+        Check if the current LDAP connection is still alive.
+
+        Returns:
+            True if connection is valid and responding, False otherwise
+        """
+        if self._conn is None:
+            return False
+
+        try:
+            # Try a simple LDAP operation to verify connection is still responsive
+            # Using whoami is a lightweight operation that doesn't require bind
+            self._conn.refresh()
+            return True
+        except Exception as e:
+            logger.debug(f"Connection validation failed: {str(e)}")
+            return False
+
+    def _create_connection(self) -> Connection:
+        """
+        Create a new LDAP connection and bind with service account.
 
         Returns:
             ldap3 Connection object
@@ -108,27 +129,51 @@ class LDAPAuthenticator:
         Raises:
             ADConnectionError: If connection fails
         """
-        if self._conn is None:
-            try:
-                server = self._get_server()
-                self._conn = Connection(
-                    server,
-                    user=self.config.bind_dn,
-                    password=self.config.bind_password,
-                    auto_bind=False,
-                )
+        try:
+            server = self._get_server()
+            conn = Connection(
+                server,
+                user=self.config.bind_dn,
+                password=self.config.bind_password,
+                auto_bind=False,
+            )
 
-                # Perform the bind
-                if not self._conn.bind():
-                    raise ADConnectionError("Failed to bind with service account credentials")
+            # Perform the bind
+            if not conn.bind():
+                raise ADConnectionError("Failed to bind with service account credentials")
 
-                logger.info("Successfully connected to AD server")
-            except LDAPInvalidCredentialsResult:
+            self._conn_time = time.time()
+            logger.info("Successfully connected to AD server")
+            return conn
+        except LDAPInvalidCredentialsResult:
+            raise ADConnectionError("Invalid service account credentials for AD bind")
+        except Exception as e:
+            raise ADConnectionError(f"Failed to connect to AD: {str(e)}")
+
+    def _get_connection(self) -> Connection:
+        """
+        Get or create LDAP connection.
+
+        Validates existing connection and reconnects if needed.
+
+        Returns:
+            ldap3 Connection object
+
+        Raises:
+            ADConnectionError: If connection fails
+        """
+        if self._conn is None or not self._is_connection_alive():
+            # Close old connection if it exists
+            if self._conn is not None:
+                try:
+                    self._conn.unbind()
+                    logger.debug("Closed stale LDAP connection")
+                except:
+                    pass
                 self._conn = None
-                raise ADConnectionError("Invalid service account credentials for AD bind")
-            except Exception as e:
-                self._conn = None
-                raise ADConnectionError(f"Failed to connect to AD: {str(e)}")
+
+            # Create new connection
+            self._conn = self._create_connection()
 
         return self._conn
 
@@ -140,6 +185,7 @@ class LDAPAuthenticator:
             except:
                 pass
             self._conn = None
+            self._conn_time = None
 
     def _normalize_username(self, username: str) -> str:
         r"""
