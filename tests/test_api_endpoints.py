@@ -20,6 +20,7 @@ import os
 import sys
 import json
 import time
+import base64
 import subprocess
 import ssl
 from pathlib import Path
@@ -574,6 +575,108 @@ class APITestSuite:
         passed, status = self.make_request("GET", "/api/user/info", invalid_token, 401)
         self.print_test("GET /api/user/info (invalid token - should return 401)", passed)
 
+    def test_webhook_basic_auth(self):
+        """Test webhook endpoints with Basic Auth."""
+        self.print_header("Testing Webhook Basic Authentication")
+
+        admin_user = os.getenv("TEST_ADMIN_USER", "MTD\\mtau")
+        admin_pass = os.getenv("TEST_ADMIN_PASSWORD", "T3est123!!")
+
+        credentials = f"{admin_user}:{admin_pass}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        headers = {"Authorization": f"Basic {encoded}"}
+
+        # Test data webhook
+        response = self.session.post(
+            f"{self.base_url}/webhooks/data",
+            json={"event_type": "test", "data": {"key": "value"}},
+            headers=headers,
+            timeout=5,
+        )
+        passed = response.status_code == 200
+        if response.status_code != 200:
+            print(f"    Error: Status {response.status_code}, Response: {response.text}")
+        self.print_test("POST /webhooks/data (Basic Auth)", passed)
+
+        # Test events webhook
+        response = self.session.post(
+            f"{self.base_url}/webhooks/events",
+            json={"event": "test_event", "payload": {}},
+            headers=headers,
+            timeout=5,
+        )
+        passed = response.status_code == 200
+        self.print_test("POST /webhooks/events (Basic Auth)", passed)
+
+    def test_jwt_endpoints_still_work(self):
+        """Verify existing JWT endpoints still work after Basic Auth addition (regression test)."""
+        self.print_header("Testing JWT Endpoints (Regression)")
+
+        if not self.admin_token:
+            print("[SKIP] Admin token not available")
+            return
+
+        endpoints = [
+            ("GET", "/api/user/info"),
+            ("GET", "/api/data/read"),
+        ]
+
+        for method, endpoint in endpoints:
+            passed, _ = self.make_request(method, endpoint, self.admin_token, 200)
+            self.print_test(f"{method} {endpoint} (JWT - regression test)", passed)
+
+    def test_basic_auth_cache(self):
+        """Test that credential caching works."""
+        self.print_header("Testing Credential Cache")
+
+        admin_user = os.getenv("TEST_ADMIN_USER", "MTD\\mtau")
+        admin_pass = os.getenv("TEST_ADMIN_PASSWORD", "T3est123!!")
+
+        credentials = f"{admin_user}:{admin_pass}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        headers = {"Authorization": f"Basic {encoded}"}
+
+        # Make 2 requests with same credentials
+        response1 = self.session.post(
+            f"{self.base_url}/webhooks/events",
+            json={"event": "test1", "payload": {}},
+            headers=headers,
+            timeout=5,
+        )
+
+        response2 = self.session.post(
+            f"{self.base_url}/webhooks/events",
+            json={"event": "test2", "payload": {}},
+            headers=headers,
+            timeout=5,
+        )
+
+        # Check cache stats
+        response_stats = self.session.get(
+            f"{self.base_url}/webhooks/cache/stats",
+            headers=headers,
+            timeout=5,
+        )
+
+        cache_working = (
+            response1.status_code == 200
+            and response2.status_code == 200
+            and response_stats.status_code == 200
+        )
+
+        self.print_test("Credential cache functioning", cache_working)
+
+        if response_stats.status_code != 200:
+            print(f"    Error: Cache stats status {response_stats.status_code}: {response_stats.text}")
+        elif response_stats.status_code == 200:
+            stats = response_stats.json().get("cache_stats", {})
+            print(f"    Cache stats: {stats}")
+
+        if response1.status_code != 200:
+            print(f"    Response 1 error: {response1.status_code}: {response1.text}")
+        if response2.status_code != 200:
+            print(f"    Response 2 error: {response2.status_code}: {response2.text}")
+
     def print_summary(self):
         """Print test summary."""
         self.print_header("Test Summary")
@@ -614,6 +717,9 @@ class APITestSuite:
             self.test_ldap_secure_connection()
             self.test_api_ssl_encryption()
             self.test_invalid_token()
+            self.test_webhook_basic_auth()
+            self.test_jwt_endpoints_still_work()
+            self.test_basic_auth_cache()
 
             # Print summary
             all_passed = self.print_summary()

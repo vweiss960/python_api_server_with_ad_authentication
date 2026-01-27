@@ -23,7 +23,9 @@ from src.security.jwt_handler import JWTHandler
 from src.security.authorization import AuthorizationManager
 from src.middleware.auth_middleware import AuthenticationMiddleware
 from src.middleware.logging_middleware import LoggingMiddleware
-from src.api import health_routes, auth_routes, user_routes, data_routes, admin_routes
+from src.api import health_routes, auth_routes, user_routes, data_routes, admin_routes, webhook_routes
+from src.middleware.basic_auth_middleware import BasicAuthMiddleware
+from src.security.credential_cache import CredentialCache
 
 logger = None
 
@@ -63,7 +65,7 @@ def setup_app(config_path: str) -> FastAPI:
         sys.exit(1)
 
     # Setup logging
-    log_level = "INFO"
+    log_level = "DEBUG"
     logger = setup_logging(level=log_level, json_format=True)
     logger.info(f"Application starting with config: {config_path}")
 
@@ -86,11 +88,24 @@ def setup_app(config_path: str) -> FastAPI:
 
     logger.info("Security components initialized successfully")
 
+    # Initialize credential cache for Basic Auth
+    basic_auth_cache = None
+    if config.authorization.basic_auth_cache_enabled:
+        basic_auth_cache = CredentialCache(
+            ttl_seconds=config.authorization.basic_auth_cache_ttl_seconds,
+            max_size=config.authorization.basic_auth_cache_max_size,
+        )
+        logger.info(
+            f"Credential cache initialized (TTL: {config.authorization.basic_auth_cache_ttl_seconds}s, Max: {config.authorization.basic_auth_cache_max_size})"
+        )
+
     # Create FastAPI application
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Startup
         logger.info("Application startup")
+        # Store cache in app state for access from routes
+        app.state.basic_auth_cache = basic_auth_cache
         try:
             authenticator.test_connection()
             logger.info("AD connection test passed")
@@ -108,8 +123,11 @@ def setup_app(config_path: str) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Add middleware
+    # Add middleware (ORDER MATTERS! They execute in reverse order of addition)
     app.add_middleware(LoggingMiddleware)
+    # Basic Auth middleware added AFTER JWT so it executes BEFORE JWT
+    if basic_auth_cache:
+        app.add_middleware(BasicAuthMiddleware, authenticator=authenticator, cache=basic_auth_cache)
     app.add_middleware(AuthenticationMiddleware, jwt_handler=jwt_handler)
 
     # Setup dependency injection for route handlers
@@ -132,6 +150,7 @@ def setup_app(config_path: str) -> FastAPI:
     app.include_router(user_routes.router)
     app.include_router(data_routes.router)
     app.include_router(admin_routes.router)
+    app.include_router(webhook_routes.router)
 
     # Exception handlers
     @app.exception_handler(APIException)

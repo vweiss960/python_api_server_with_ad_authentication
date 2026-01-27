@@ -71,6 +71,11 @@ authorization:
   # If true: "CN=API-Admins,OU=Groups,DC=example,DC=com" becomes "API-Admins"
   # If false: use full DN for matching
   use_simple_names: true
+  # Basic Auth credential cache settings (for webhook endpoints)
+  # Caches successful LDAP authentications to reduce AD load
+  basic_auth_cache_enabled: true
+  basic_auth_cache_ttl_seconds: 300  # How long to cache credentials (5 minutes)
+  basic_auth_cache_max_size: 1000    # Maximum number of cached entries
   # Authorization rules - map paths to required groups
   rules:
     # Admin endpoints - require API-Admins group

@@ -32,7 +32,13 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
     def _is_public_path(self, path: str) -> bool:
         """Check if path is public (doesn't require auth)."""
-        return path in PUBLIC_PATHS
+        # Check exact matches first
+        if path in PUBLIC_PATHS:
+            return True
+        # Check webhook paths (handled by BasicAuthMiddleware)
+        if path.startswith("/webhooks/"):
+            return True
+        return False
 
     def _extract_token(self, request: Request) -> str:
         """

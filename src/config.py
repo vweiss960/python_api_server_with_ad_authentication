@@ -53,6 +53,10 @@ class AuthorizationConfig:
     """Authorization configuration."""
     group_attribute: str = "memberOf"
     use_simple_names: bool = True
+    # Basic Auth cache settings
+    basic_auth_cache_enabled: bool = True
+    basic_auth_cache_ttl_seconds: int = 300
+    basic_auth_cache_max_size: int = 1000
     rules: List[AuthorizationRule] = None
 
     def __post_init__(self):
